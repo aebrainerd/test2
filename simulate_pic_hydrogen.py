@@ -185,7 +185,7 @@ def main():
         ex += dt * ((1.0 / eps0) * dbz_dy - jx / eps0)
         ey += dt * ((1.0 / eps0) * minus_dbz_dx - jy / eps0)
 
-        # Lorentz field at electron
+        # Lorentz field at electron (for radiation visualization, not particle push)
         e_grid, b_grid = interpolate_field(ex, ey, bz, electron.x, dx)
 
         # Direct Coulomb near-field (proton -> electron)
@@ -193,7 +193,10 @@ def main():
         r = np.linalg.norm(rvec) + 1e-9
         e_coul = k_coul * proton.q * rvec / (r**3)
 
-        e_total = e_grid + e_coul
+        # Use only Coulomb for particle dynamics (avoid numerical self-force from grid)
+        # Grid fields still computed for radiation visualization
+        e_total = e_coul  # was: e_grid + e_coul
+        b_grid = 0.0      # ignore self B-field too
 
         # Radiation reaction (nonrelativistic LL-inspired dissipation)
         if not args.no_rad_reaction:
