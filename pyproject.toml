@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "multiscale-contact"
+version = "0.1.0"
+description = "Starter architecture for zoomable multiscale contact physics simulation"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Codex" }]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+viz = ["pyvista>=0.43"]
+fenicsx = ["fenics-dolfinx>=0.8"]
+lammps = ["lammps>=2024.8"]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+multiscale-contact-demo = "multiscale_contact.demo.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["multiscale_contact"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["multiscale_contact", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+show_error_codes = true
+files = ["multiscale_contact", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*", "pyvista.*"]
+ignore_missing_imports = true
