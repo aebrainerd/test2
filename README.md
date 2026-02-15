@@ -1,46 +1,80 @@
-# Pedagogical PIC-like Hydrogen Simulation (Classical Inspiral)
+# multiscale-contact
 
-This repository contains a compact **2D electromagnetic PIC-style** simulation of an electron orbiting a proton in classical electrodynamics.
+Starter codebase for a **zoomable multiscale contact simulation** of a metal ball resting/sliding on a plastic table.
 
-It is intentionally pedagogical: if radiation reaction is included, the electron loses orbital energy and spirals inward, illustrating why classical mechanics/electrodynamics cannot explain stable atoms.
+## Model overview
 
-## Model ingredients
+The package implements three concurrent levels with explicit coupling hooks:
 
-- **Particles:** one electron and one proton.
-- **Fields:** grid-based `E_x, E_y, B_z` updated with a Yee-like finite-difference Maxwell step.
-- **PIC coupling:**
-  - cloud-in-cell (CIC) current deposition from particle velocity,
-  - CIC interpolation of fields to particle position.
-- **Particle pusher:** Boris integrator.
-- **Near field:** direct Coulomb attraction (proton→electron) added explicitly so bound motion is visible.
-- **Radiation reaction:** nonrelativistic Landau–Lifshitz-inspired damping term (toggleable).
+1. **Continuum (`continuum/`)**
+   - Hertz sphere-on-half-space analytic contact.
+   - Produces `p(x)`, slip-rate field `v(x)`, and temperature field `T(x)`.
+   - Includes an abstract/stub path for FEM solver replacement later.
 
-> This is not a high-fidelity atomic physics solver. It is designed for intuition and classroom-style exploration.
+2. **Mesoscale (`meso/`)**
+   - Roughness tile represented by Gaussian heightfield.
+   - Greenwood–Williamson-style contact fraction surrogate from pressure.
+   - Diet rate-and-state friction state variable `theta`.
+   - Returns shear traction, effective friction, heat partition, and updated state.
 
-## Run
+3. **Nanoscale (`nano/`)**
+   - Minimal Lennard-Jones MD patch runner.
+   - Applies boundary forcing using pressure/slip/temperature from mesoscale hotspot.
+   - Returns average traction, variance, adhesion work estimate, thermal boundary conductance.
+   - Wrapped by cache keyed by binned `(p, v, T, theta)` for speed.
 
-```bash
-python simulate_pic_hydrogen.py --steps 5000
+## Coupling strategy
+
+`coupling/engine.py` runs fixed-point iterations:
+
+```text
+continuum -> meso -> nano -> meso -> continuum-facing closure summary
 ```
 
-Useful options:
+Key closure channels:
+- nano -> meso: friction shift + adhesion work
+- meso -> continuum: tile-averaged traction and heat split summaries
+
+Design assumptions for no ghost-force style artifacts:
+- Continuum load is primary normal-force budget.
+- Meso/nano closures modify constitutive response (traction/adhesion), not duplicate externally applied loads.
+- Blending/relaxation is used when injecting nano corrections.
+
+See `docs/design.md` for details.
+
+## Installation
+
+This project uses **PEP 621 `pyproject.toml`** with Hatchling.
 
 ```bash
-python simulate_pic_hydrogen.py --help
-python simulate_pic_hydrogen.py --no-rad-reaction --steps 5000
-python simulate_pic_hydrogen.py --steps 8000 --dt 0.02 --r0 10
-python simulate_pic_hydrogen.py --no-plots --steps 1000
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
 ```
 
-The default plotted summary is saved as `pic_hydrogen_summary.png`.
+Optional integrations (future):
+- `pip install -e .[fenicsx]`
+- `pip install -e .[lammps]`
+- `pip install -e .[viz]`
 
-## What to look for
+## Run demo
 
-- With radiation reaction **on** (default), the orbital radius trends downward.
-- With radiation reaction **off**, the orbit is much less dissipative.
-- Energy plot shows kinetic + potential + field channels and their exchange.
+```bash
+python -m multiscale_contact.demo
+```
 
-## Notes
+This prints coupling iteration summaries and writes `demo_multiscale.png`.
 
-- The script uses normalized units (`c=1`, `eps0=1`, `mu0=1`).
-- Keep `dt` below the printed CFL suggestion to avoid numerical instability.
+## Testing and quality
+
+```bash
+pytest
+ruff check .
+mypy
+```
+
+## Extending to real FEM/MD
+
+- Replace `FEMSolverStub` with a Fenicsx-backed solver implementing `sample_fields`.
+- Replace `LJNanoPatchRunner` with a backend adapter (LAMMPS/ASE) preserving `run(NanoBoundaryCondition)->NanoResponse`.
+- Add richer energy accounting and conservative projection operators in `coupling/`.
